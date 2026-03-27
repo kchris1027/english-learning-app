@@ -1,0 +1,425 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// AUTH
+// ============================================================
+model User {
+  id             String    @id @default(cuid())
+  name           String?
+  email          String    @unique
+  emailVerified  DateTime?
+  passwordHash   String?
+  image          String?
+  role           String    @default("user")
+  nativeLanguage String    @default("zh-CN")
+  level          String    @default("beginner")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  wordProgress      UserWordProgress[]
+  grammarProgress   UserGrammarProgress[]
+  readingProgress   UserReadingProgress[]
+  listeningProgress UserListeningProgress[]
+  speakingRecords   SpeakingRecord[]
+  chatConversations ChatConversation[]
+  quizAttempts      QuizAttempt[]
+  dailyProgress     DailyProgress[]
+  streak            UserStreak?
+  wordbookEntries   WordbookEntry[]
+}
+
+// ============================================================
+// VOCABULARY
+// ============================================================
+model WordBank {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  level       String
+  category    String
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  words Word[]
+}
+
+model Word {
+  id                 String   @id @default(cuid())
+  word               String
+  phonetic           String?
+  phoneticAudio      String?
+  partOfSpeech       String
+  definition         String
+  definitionZh       String?
+  exampleSentence    String?
+  exampleTranslation String?
+  difficulty         Int      @default(1)
+  tags               String?
+  createdAt          DateTime @default(now())
+
+  bankId         String
+  bank           WordBank          @relation(fields: [bankId], references: [id])
+  userProgress   UserWordProgress[]
+  wordbookEntries WordbookEntry[]
+
+  @@unique([word, partOfSpeech, bankId])
+  @@index([bankId])
+}
+
+model UserWordProgress {
+  id             String    @id @default(cuid())
+  userId         String
+  wordId         String
+  status         String    @default("new")
+  easeFactor     Float     @default(2.5)
+  interval       Int       @default(0)
+  repetitions    Int       @default(0)
+  nextReviewAt   DateTime  @default(now())
+  lastReviewedAt DateTime?
+  correctCount   Int       @default(0)
+  incorrectCount Int       @default(0)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  word Word @relation(fields: [wordId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, wordId])
+  @@index([userId, nextReviewAt])
+  @@index([userId, status])
+}
+
+// ============================================================
+// WORDBOOK (global)
+// ============================================================
+model WordbookEntry {
+  id               String   @id @default(cuid())
+  userId           String
+  wordId           String?
+  customWord       String?
+  customDefinition String?
+  customPhonetic   String?
+  source           String
+  sourceId         String?
+  createdAt        DateTime @default(now())
+
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  word Word? @relation(fields: [wordId], references: [id])
+
+  @@unique([userId, wordId])
+  @@index([userId])
+}
+
+// ============================================================
+// GRAMMAR
+// ============================================================
+model GrammarTopic {
+  id          String   @id @default(cuid())
+  title       String
+  slug        String   @unique
+  description String?
+  level       String
+  sortOrder   Int      @default(0)
+  content     String
+  tips        String?
+  createdAt   DateTime @default(now())
+
+  exercises    GrammarExercise[]
+  userProgress UserGrammarProgress[]
+}
+
+model GrammarExercise {
+  id          String @id @default(cuid())
+  topicId     String
+  type        String
+  question    String
+  options     String?
+  answer      String
+  explanation String?
+  difficulty  Int    @default(1)
+  sortOrder   Int    @default(0)
+
+  topic GrammarTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@index([topicId])
+}
+
+model UserGrammarProgress {
+  id            String    @id @default(cuid())
+  userId        String
+  topicId       String
+  status        String    @default("not_started")
+  score         Int?
+  attempts      Int       @default(0)
+  lastAttemptAt DateTime?
+  completedAt   DateTime?
+
+  user  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic GrammarTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, topicId])
+}
+
+// ============================================================
+// READING
+// ============================================================
+model ReadingArticle {
+  id            String   @id @default(cuid())
+  title         String
+  slug          String   @unique
+  content       String
+  summary       String?
+  level         String
+  category      String
+  wordCount     Int
+  estimatedTime Int
+  imageUrl      String?
+  source        String?
+  isAiGenerated Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  questions     ReadingQuestion[]
+  keyVocabulary String?
+  userProgress  UserReadingProgress[]
+}
+
+model ReadingQuestion {
+  id          String  @id @default(cuid())
+  articleId   String
+  type        String
+  question    String
+  options     String?
+  answer      String
+  explanation String?
+  sortOrder   Int     @default(0)
+
+  article ReadingArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@index([articleId])
+}
+
+model UserReadingProgress {
+  id            String    @id @default(cuid())
+  userId        String
+  articleId     String
+  status        String    @default("not_started")
+  score         Int?
+  readingTimeMs Int?
+  completedAt   DateTime?
+
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  article ReadingArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, articleId])
+}
+
+// ============================================================
+// LISTENING
+// ============================================================
+model ListeningContent {
+  id           String   @id @default(cuid())
+  title        String
+  slug         String   @unique
+  audioUrl     String
+  transcript   String
+  level        String
+  category     String
+  durationSec  Int
+  speakerCount Int      @default(1)
+  createdAt    DateTime @default(now())
+
+  exercises    ListeningExercise[]
+  userProgress UserListeningProgress[]
+}
+
+model ListeningExercise {
+  id           String  @id @default(cuid())
+  contentId    String
+  type         String
+  question     String
+  answer       String
+  options      String?
+  hint         String?
+  startTimeSec Float?
+  endTimeSec   Float?
+  sortOrder    Int     @default(0)
+
+  content ListeningContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@index([contentId])
+}
+
+model UserListeningProgress {
+  id          String    @id @default(cuid())
+  userId      String
+  contentId   String
+  status      String    @default("not_started")
+  score       Int?
+  completedAt DateTime?
+
+  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content ListeningContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, contentId])
+}
+
+// ============================================================
+// SPEAKING
+// ============================================================
+model SpeakingPrompt {
+  id            String   @id @default(cuid())
+  type          String
+  title         String
+  content       String
+  referenceText String?
+  level         String
+  category      String?
+  createdAt     DateTime @default(now())
+
+  records SpeakingRecord[]
+}
+
+model SpeakingRecord {
+  id                 String   @id @default(cuid())
+  userId             String
+  promptId           String?
+  transcription      String
+  audioUrl           String?
+  pronunciationScore Float?
+  fluencyScore       Float?
+  accuracyScore      Float?
+  feedback           String?
+  createdAt          DateTime @default(now())
+
+  user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prompt SpeakingPrompt? @relation(fields: [promptId], references: [id])
+
+  @@index([userId])
+}
+
+// ============================================================
+// AI CHAT
+// ============================================================
+model ChatConversation {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String?
+  scenario  String?
+  level     String   @default("intermediate")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages ChatMessage[]
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model ChatMessage {
+  id               String   @id @default(cuid())
+  conversationId   String
+  role             String
+  content          String
+  correctedContent String?
+  corrections      String?
+  createdAt        DateTime @default(now())
+
+  conversation ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+}
+
+// ============================================================
+// QUIZ
+// ============================================================
+model Quiz {
+  id            String   @id @default(cuid())
+  title         String
+  description   String?
+  type          String
+  level         String?
+  modules       String
+  timeLimit     Int?
+  questionCount Int
+  passingScore  Int      @default(60)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  questions QuizQuestion[]
+  attempts  QuizAttempt[]
+}
+
+model QuizQuestion {
+  id          String  @id @default(cuid())
+  quizId      String
+  module      String
+  type        String
+  question    String
+  options     String?
+  answer      String
+  explanation String?
+  points      Int     @default(1)
+  sortOrder   Int     @default(0)
+
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@index([quizId])
+}
+
+model QuizAttempt {
+  id           String    @id @default(cuid())
+  userId       String
+  quizId       String
+  answers      String
+  score        Int
+  totalPoints  Int
+  percentage   Float
+  timeSpentSec Int?
+  startedAt    DateTime  @default(now())
+  completedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([quizId])
+}
+
+// ============================================================
+// PROGRESS
+// ============================================================
+model DailyProgress {
+  id               String @id @default(cuid())
+  userId           String
+  date             String
+  wordsLearned     Int    @default(0)
+  wordsReviewed    Int    @default(0)
+  grammarCompleted Int    @default(0)
+  articlesRead     Int    @default(0)
+  listeningMinutes Float  @default(0)
+  speakingMinutes  Float  @default(0)
+  chatMessages     Int    @default(0)
+  quizzesTaken     Int    @default(0)
+  totalXp          Int    @default(0)
+  studyTimeMin     Int    @default(0)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+model UserStreak {
+  id             String  @id @default(cuid())
+  userId         String  @unique
+  currentStreak  Int     @default(0)
+  longestStreak  Int     @default(0)
+  lastActiveDate String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
