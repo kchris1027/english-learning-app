@@ -2,14 +2,14 @@ import { Suspense } from "react";
 import { prisma } from "@/lib/db";
 import { getDefaultUserId } from "@/lib/auth";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ReadingClient } from "./reading-client";
+import { ReadingPageClient } from "./reading-page-client";
 
 interface Props {
-  searchParams: Promise<{ level?: string; category?: string }>;
+  searchParams: Promise<{ level?: string; category?: string; tab?: string }>;
 }
 
 export default async function ReadingPage({ searchParams }: Props) {
-  const { level, category } = await searchParams;
+  const { level, category, tab } = await searchParams;
   const userId = getDefaultUserId();
 
   const where: Record<string, string> = {};
@@ -53,12 +53,16 @@ export default async function ReadingPage({ searchParams }: Props) {
     };
   });
 
+  const rssFeedCount = await prisma.rssFeed.count({ where: { userId } });
+
   return (
     <Suspense fallback={<Skeleton className="h-10 w-full" />}>
-      <ReadingClient
+      <ReadingPageClient
         articles={serializedArticles}
         categories={allCategories}
         totalArticles={serializedArticles.length}
+        initialTab={tab === "rss" ? "rss" : "library"}
+        rssFeedCount={rssFeedCount}
       />
     </Suspense>
   );
